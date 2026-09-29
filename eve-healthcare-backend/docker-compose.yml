@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: eve_healthcare
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/eve_healthcare
+      JWT_SECRET: change_this_secret_in_production
+      JWT_EXPIRES_IN: 1d
+      REDIS_URL: redis://redis:6379
+      PAYMENT_FAILURE_RATE: 0.2
+      WEBHOOK_FAILURE_SIMULATION_RATE: 0.15
+    ports:
+      - "3000:3000"
+    command: sh -c "node db/migrate.js && node src/server.js"
+
+volumes:
+  pgdata:
